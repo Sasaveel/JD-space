@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Detailer</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&family=Montserrat:wght@600;700;800&family=Bebas+Neue&display=swap" rel="stylesheet">
+<script>
+tailwind.config = { theme: { extend: {
+  fontFamily: { sans: ['Inter','sans-serif'], heading: ['Montserrat','sans-serif'], title: ['Bebas Neue','sans-serif'] },
+  colors: { custom: { text:'#e8eddf', hover:'#0062ff', card:'#151515', cyan:'#00c8ff' } }
+}}}
+</script>
+<style>
+:root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{background:#000;min-height:100vh;display:flex;flex-direction:column}
+header,nav,main,footer{position:relative;z-index:1}
+.ic{width:1em;height:1em;display:inline-block;vertical-align:-.125em}
+.tab-btn.active{color:#0062ff;border-bottom-color:#0062ff}
+.tab-btn{border-bottom:2px solid transparent;padding-bottom:4px}
+.underline-x{position:absolute;bottom:-4px;left:50%;transform:translateX(-50%);width:40px;height:2px;background:#0062ff}
+.pkg-img{background-size:cover;background-position:center;container-type:inline-size}
+.section{display:none}.section.show{display:block;flex:1 0 auto}
+/* Camada do "Saber mais" (efeito vidro fosco).
+   --ov-alpha: quanto MENOR, mais transparente (0 a 1) | --ov-blur: desfoque da imagem que aparece por trás */
+.ov{--ov-alpha:.68;--ov-blur:10px;background:rgba(8,14,26,var(--ov-alpha));-webkit-backdrop-filter:blur(var(--ov-blur));backdrop-filter:blur(var(--ov-blur));overflow-y:auto;opacity:0;pointer-events:none;transition:opacity .3s ease}
+.ov.open{opacity:1;pointer-events:auto}
+.ov ul{font-size:13px;font-size:clamp(11px,3.9cqw,16px);display:flex;flex-direction:column;gap:.55em;text-shadow:0 1px 6px rgba(0,0,0,.75)}
+.ov li{display:flex;align-items:center;justify-content:center;gap:.6em;line-height:1.3}
+.ov-dot{width:.45em;height:.45em;border-radius:9999px;background:#00c8ff;flex:none}
+/* Menu lateral (otimizado: sem backdrop-blur, com aceleração de GPU) */
+.menu-ov{opacity:0;pointer-events:none;background:rgba(0,0,0,.78);transition:opacity .25s ease;will-change:opacity}
+.menu-panel{transform:translate3d(-100%,0,0);visibility:hidden;transition:transform .3s ease,visibility 0s linear .3s;will-change:transform;contain:layout paint}
+body.menu-open{overflow:hidden}
+body.menu-open .menu-ov{opacity:1;pointer-events:auto}
+body.menu-open .menu-panel{transform:translate3d(0,0,0);visibility:visible;transition:transform .3s ease,visibility 0s}
+.menu-panel .overflow-y-auto{overscroll-behavior:contain}
+.menu-list li:not(:last-child){border-bottom:1px solid rgba(255,255,255,.15)}
+.btn-more{background:#334155}.btn-more:hover{background:#475569}.btn-more.open{background:#0062ff}.btn-more.open:hover{background:#2f7dff}
+.ba{--pos:50%;user-select:none;-webkit-user-select:none}
+.ba:focus-within{outline:2px solid #0062ff;outline-offset:2px}
+.ba-layer{position:absolute;inset:0;background-size:cover;background-position:center}
+.ba-before{clip-path:inset(0 calc(100% - var(--pos)) 0 0)}
+.ba-line{position:absolute;top:0;bottom:0;left:var(--pos);width:2px;margin-left:-1px;background:#fff;box-shadow:0 0 8px rgba(0,0,0,.6);pointer-events:none}
+.ba-knob{position:absolute;top:50%;left:50%;width:42px;height:42px;transform:translate(-50%,-50%);border-radius:9999px;background:#0062ff;border:2px solid #fff;display:flex;align-items:center;justify-content:center;color:#fff;box-shadow:0 4px 14px rgba(0,0,0,.5)}
+.ba-range{position:absolute;inset:0;width:100%;height:100%;margin:0;opacity:0;cursor:ew-resize;touch-action:pan-y}
+</style>
+</head>
+<body class="text-custom-text font-sans antialiased relative overflow-x-hidden">
+
+<!-- Fundo Grainient (WebGL) -->
+<canvas id="bg" aria-hidden="true" style="position:fixed;inset:0;width:100%;height:100%;z-index:0;display:block"></canvas>
+
+<svg width="0" height="0" style="position:absolute">
+  <symbol id="menu" viewBox="0 0 24 24"><path d="M3 6h18M3 12h18M3 18h18" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/></symbol>
+  <symbol id="search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2" fill="none"/><path d="M20 20l-4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+  <symbol id="user" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" fill="none"/><circle cx="12" cy="10" r="3" fill="currentColor"/><path d="M6 18c1-3 4-4 6-4s5 1 6 4" fill="currentColor"/></symbol>
+  <symbol id="arrow" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/></symbol>
+  <symbol id="wa" viewBox="0 0 24 24"><path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2z" stroke="currentColor" stroke-width="2" fill="none" stroke-linejoin="round"/><path d="M8.5 8.5c0 3 3 6 6 6l1.5-1.5-2-1-1 .8c-1-.4-2-1.4-2.4-2.4l.8-1-1-2z" fill="currentColor"/></symbol>
+  <symbol id="ig" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="5" stroke="currentColor" stroke-width="2" fill="none"/><circle cx="12" cy="12" r="4" stroke="currentColor" stroke-width="2" fill="none"/><circle cx="17.5" cy="6.5" r="1.2" fill="currentColor"/></symbol>
+  <symbol id="phone" viewBox="0 0 24 24"><path d="M6.62 10.79c1.44 2.83 3.76 5.14 6.59 6.59l2.2-2.2c.27-.27.67-.36 1.02-.24 1.12.37 2.33.57 3.57.57.55 0 1 .45 1 1V20c0 .55-.45 1-1 1-9.39 0-17-7.61-17-17 0-.55.45-1 1-1h3.5c.55 0 1 .45 1 1 0 1.25.2 2.45.57 3.57.11.35.03.74-.25 1.02l-2.2 2.2z" fill="currentColor"/></symbol>
+  <symbol id="chev" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/></symbol>
+  <symbol id="close" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/></symbol>
+</svg>
+
+<header class="grid grid-cols-3 items-center px-8 py-3 border-b border-gray-800 bg-black/80 backdrop-blur-md">
+  <button data-menu-open aria-controls="menu-panel" aria-expanded="false" class="justify-self-start flex items-center gap-3 hover:text-custom-hover transition-colors font-semibold uppercase tracking-wider text-sm">
+    <svg class="ic text-xl"><use href="#menu"/></svg> Menu
+  </button>
+  <a href="#" data-tab="inicio" class="tab-link justify-self-center" aria-label="João Detailer - Início">
+    <img src="logo.png" alt="João Detailer" class="block h-14 w-auto">
+  </a>
+  <button class="justify-self-end hover:text-custom-hover transition-colors text-xl"><svg class="ic"><use href="#search"/></svg></button>
+</header>
+
+<!-- MENU LATERAL (abre pelo botão "Menu") -->
+<div class="menu-ov fixed inset-0 z-[60]" data-close-menu></div>
+<aside id="menu-panel" class="menu-panel fixed top-0 left-0 bottom-0 w-[85%] max-w-sm bg-[#060b16] border-r border-white/10 z-[70] flex flex-col" aria-label="Menu" aria-hidden="true">
+  <div class="flex items-center justify-between px-6 py-4 border-b border-white/10">
+    <img src="logo.png" alt="João Detailer" class="h-10 w-auto">
+    <button data-close-menu aria-label="Fechar menu" class="text-2xl hover:text-custom-hover transition-colors"><svg class="ic"><use href="#close"/></svg></button>
+  </div>
+  <div class="flex-1 overflow-y-auto py-8 px-6">
+    <!-- Itens do menu: data-tab = aba que abre | data-scroll = id do trecho para onde rola -->
+    <ul class="menu-list border-l-2 border-[#0062ff]">
+      <li><a href="#" data-tab="sobre" class="tab-link flex items-center justify-between px-5 py-5 font-heading font-semibold uppercase tracking-wider text-[15px] hover:text-custom-hover hover:bg-white/5 transition-colors">Sobre nós <svg class="ic text-lg"><use href="#chev"/></svg></a></li>
+      <li><a href="#" data-tab="inicio" data-scroll="antes-depois" class="tab-link flex items-center justify-between px-5 py-5 font-heading font-semibold uppercase tracking-wider text-[15px] hover:text-custom-hover hover:bg-white/5 transition-colors">Nosso trabalho <svg class="ic text-lg"><use href="#chev"/></svg></a></li>
+      <li><a href="#" data-tab="servicos" class="tab-link flex items-center justify-between px-5 py-5 font-heading font-semibold uppercase tracking-wider text-[15px] hover:text-custom-hover hover:bg-white/5 transition-colors">Serviços <svg class="ic text-lg"><use href="#chev"/></svg></a></li>
+      <li><a href="#" data-tab="contato" class="tab-link flex items-center justify-between px-5 py-5 font-heading font-semibold uppercase tracking-wider text-[15px] hover:text-custom-hover hover:bg-white/5 transition-colors">Contato <svg class="ic text-lg"><use href="#chev"/></svg></a></li>
+    </ul>
+  </div>
+</aside>
+
+<nav class="flex justify-center items-center gap-10 sm:gap-16 py-4 border-b border-gray-800 bg-black/60">
+  <button data-tab="inicio" class="tab-btn tab-link active hover:text-custom-hover font-semibold text-sm tracking-widest uppercase transition-colors">Início</button>
+  <button data-tab="servicos" class="tab-btn tab-link hover:text-custom-hover font-semibold text-sm tracking-widest uppercase transition-colors">Serviços</button>
+  <button data-tab="contato" class="tab-btn tab-link hover:text-custom-hover font-semibold text-sm tracking-widest uppercase transition-colors">Contato</button>
+</nav>
+
+<!-- INÍCIO -->
+<main id="inicio" class="section show px-8 py-10">
+  <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 w-full max-w-[1600px] mx-auto lg:h-[65vh]">
+    <template id="home-cards"></template>
+    <script>
+      // Terceiro item = nome do arquivo da imagem, na mesma pasta deste HTML (null = sem imagem)
+      const home = [
+        ['Revitalização de plásticos internos','Restaura a cor e a aparência de novo de painéis e portas, protegendo contra o ressecamento do sol sem engordurar.','plasticos.png'],
+        ['Secagem técnica','Remoção da água com soprador térmico e microfibra, evitando frestas pingando e riscos na pintura.','secagem.png'],
+        ['Limpeza detalhada de rodas/pneus','Remoção profunda de fuligem de freio e sujeira encrostada em rodas e caixas de roda, com proteção para os pneus.','rodas.png'],
+        ['Efeito hidrorepelente','Aplicação de tratamento que repelir água e sujeira, mantendo o veículo mais limpo por mais tempo.','efeito.png']
+      ];
+      document.write(home.map(([t,d,img]) => `
+      <div class="relative min-h-[380px] h-full bg-custom-card rounded-lg overflow-hidden group border border-gray-800/60 shadow-2xl">
+        <div class="absolute inset-0 bg-neutral-900 group-hover:bg-neutral-800 transition-colors duration-500"></div>
+        ${img ? `<div class="absolute inset-0 bg-cover bg-center transition-transform duration-700 group-hover:scale-105" style="background-image:url('${img}')"></div>` : ''}
+        <div class="absolute inset-0 bg-gradient-to-t from-black via-black/80 to-transparent"></div>
+        <div class="absolute bottom-0 left-0 right-0 p-6 flex flex-col items-center text-center">
+          <h3 class="font-title text-3xl tracking-wide mb-2 group-hover:text-custom-hover transition-colors">${t}</h3>
+          <p class="text-sm mb-6 font-light leading-relaxed">${d}</p>
+          <button data-tab="servicos" class="tab-link relative text-sm font-semibold tracking-widest uppercase hover:text-custom-hover transition-colors pb-1">EXPLORAR <svg class="ic"><use href="#arrow"/></svg><span class="underline-x"></span></button>
+        </div>
+      </div>`).join(''));
+    </script>
+  </div>
+
+  <!-- ANTES E DEPOIS (os itens são editados no script lá embaixo: "antesDepois") -->
+  <section id="antes-depois" class="w-full max-w-[1600px] mx-auto mt-16">
+    <h2 class="font-heading text-center text-3xl sm:text-4xl font-extrabold">Antes e <span class="text-custom-cyan">Depois</span></h2>
+    <p class="text-center text-sm text-slate-400 mt-2 mb-8">Arraste para ver a transformação.</p>
+    <div id="ba" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"></div>
+  </section>
+</main>
+
+<!-- SOBRE NÓS (abre pelo menu e pelo botão fixo "Sobre nós") -->
+<main id="sobre" class="section px-8 py-16">
+  <div class="max-w-3xl mx-auto text-center">
+    <h2 class="font-heading text-4xl font-extrabold mb-6">Sobre <span class="text-custom-cyan">Nós</span></h2>
+    <!-- EDITE O TEXTO ABAIXO -->
+    <p class="text-slate-300 leading-relaxed">Somos o João Detailer, especialistas em estética automotiva profissional. Cuidamos do seu carro em cada etapa, da lavagem ao polimento, com produtos e técnicas específicos para cada acabamento.</p>
+  </div>
+</main>
+
+<!-- SERVIÇOS -->
+<main id="servicos" class="section px-8 py-10">
+  <div class="max-w-[1600px] mx-auto">
+    <h2 class="font-heading text-center text-4xl font-extrabold">Os Nossos <span class="text-custom-cyan">Pacotes</span></h2>
+    <p class="text-center text-sm text-slate-400 mt-2 mb-10">Escolha o nível de detalhamento perfeito para o seu carro.</p>
+    <div id="pkgs" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6"></div>
+  </div>
+</main>
+
+<!-- CONTATO -->
+<main id="contato" class="section px-8 py-16 text-center">
+  <h2 class="font-heading text-4xl font-extrabold mb-3">Fale <span class="text-custom-cyan">Conosco</span></h2>
+  <p class="text-slate-400 mb-8">Chame no WhatsApp ou no Instagram e agende o seu horário.</p>
+  <div class="flex flex-wrap justify-center gap-4">
+    <a href="https://wa.me/5567992535717" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-2 bg-[#22c55e] hover:bg-green-600 text-white font-semibold px-6 py-3 rounded-lg transition-colors">
+      <svg class="ic text-xl"><use href="#wa"/></svg> WhatsApp
+    </a>
+    <a href="https://www.instagram.com/detailer_joaoo/" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-2 bg-gradient-to-tr from-[#f58529] via-[#dd2a7b] to-[#8134af] hover:opacity-90 text-white font-semibold px-6 py-3 rounded-lg transition-opacity">
+      <svg class="ic text-xl"><use href="#ig"/></svg> Instagram
+    </a>
+  </div>
+</main>
+
+<!-- RODAPÉ -->
+<footer class="bg-[#0055ff] text-white">
+  <div class="max-w-5xl mx-auto px-8 pt-8 pb-24 md:py-8 grid grid-cols-1 md:grid-cols-3 items-center gap-6 text-center md:text-left">
+    <div>
+      <div class="flex items-center justify-center md:justify-start gap-3">
+        <img src="logo.png" alt="" class="h-7 w-auto">
+        <span class="font-heading font-bold uppercase tracking-wider text-lg">João Detailer</span>
+      </div>
+      <p class="text-sm font-light mt-3">Estética Automotiva Profissional.</p>
+    </div>
+    <div class="flex justify-center gap-4">
+      <a href="https://wa.me/5567992535717" target="_blank" rel="noopener noreferrer" aria-label="WhatsApp" class="w-12 h-12 rounded-full bg-white/15 hover:bg-white/25 flex items-center justify-center text-xl shadow-lg transition-colors"><svg class="ic"><use href="#wa"/></svg></a>
+      <a href="https://www.instagram.com/detailer_joaoo/" target="_blank" rel="noopener noreferrer" aria-label="Instagram" class="w-12 h-12 rounded-full bg-white/15 hover:bg-white/25 flex items-center justify-center text-xl shadow-lg transition-colors"><svg class="ic"><use href="#ig"/></svg></a>
+    </div>
+    <div class="text-sm font-light md:justify-self-end">
+      <p class="flex items-center justify-center md:justify-start gap-2"><svg class="ic"><use href="#phone"/></svg> (67) 99253-5717</p>
+      <p class="mt-1">© <span id="ano">2026</span> João Detailer. Todos os direitos reservados.</p>
+    </div>
+  </div>
+</footer>
+
+<a href="#" data-tab="sobre" class="tab-link fixed bottom-0 left-0 bg-[#0062ff] text-white font-bold py-3 px-6 rounded-tr-lg border border-white/30 z-50 flex items-center gap-2 hover:bg-yellow-400 transition-colors shadow-lg" style="padding-bottom:calc(.75rem + env(safe-area-inset-bottom,0px))">
+  <svg class="ic text-lg"><use href="#user"/></svg><span class="hover:text-custom-hover transition-colors">Sobre nós</span>
+</a>
+<a href="https://wa.me/5567992535717" target="_blank" rel="noopener noreferrer" class="fixed bottom-6 right-6 bg-[#25D366] text-white w-14 h-14 rounded-full shadow-2xl flex items-center justify-center hover:bg-green-600 hover:scale-110 transition-all z-50">
+  <svg class="ic text-3xl"><use href="#wa"/></svg>
+</a>
+
+<script>
+// ===== Pacotes: edite nome, preço, itens e imagem aqui =====
+// img = nome do arquivo da imagem, na mesma pasta deste HTML
+// itens = lista que aparece sobre a imagem ao clicar em "Saber mais"
+const pacotes = [
+  { nome:'Lavagem Simples', preco:'R$ 80', img:'pack1.png',
+    itens:['Lavagem externa','Limpeza de rodas','Secagem','Lavagem interna','Pretinho nos pneus'] },
+  { nome:'Lavagem Intermediária', preco:'R$ 120', img:'pack2.png',
+    itens:['Lavagem externa e interna','Aplicação de cera líquida','Limpeza de rodas','Secagem','Pretinho nos pneus'] },
+  { nome:'Lavagem Detalhada', preco:'R$ 180', img:'pack3.png',
+    itens:['Lavagem externa completa','Limpeza detalhada de rodas e pneus','Secagem técnica','Limpeza interna completa','Aplicação de cera líquida','Acabamento nos pneus','Limpeza de cantos e detalhes'] },
+  { nome:'LAVAGEM DETALHADA PREMIUM', preco:'R$ 400', img:'pack4.png',
+    itens:['Tudo da Lavagem Detalhada','Revitalização de plásticos internos','Aplicação de cera premium','Limpeza de plásticos','Higienização de bancos'] }
+];
+const wa = 'https://wa.me/5567992535717?text=';
+document.getElementById('pkgs').innerHTML = pacotes.map((p,i) => `
+  <article class="flex flex-col rounded-xl overflow-hidden border border-slate-700/60 bg-[#0f172a] shadow-xl">
+    <div class="pkg-img relative aspect-[1122/662]" style="background-image:url('${p.img}'),linear-gradient(135deg,#334155,#0f1a2e)">
+      <div id="o${i}" class="ov absolute inset-0 flex items-center justify-center px-3 py-3">
+        <ul class="text-center font-medium">
+          ${p.itens.map(t => `<li><span class="ov-dot"></span>${t}</li>`).join('')}
+        </ul>
+      </div>
+    </div>
+    <div class="p-5 flex flex-col gap-3 flex-1">
+      <div>
+        <h3 class="font-heading font-extrabold uppercase tracking-wide text-lg">${p.nome}</h3>
+        <div class="text-custom-cyan font-bold text-2xl">${p.preco}</div>
+      </div>
+      <div class="flex gap-2 mt-auto">
+        <button data-more="${i}" class="btn-more flex-1 text-white text-xs font-semibold py-2.5 rounded-lg transition-colors">Saber mais</button>
+        <a href="${wa + encodeURIComponent('Olá! Tenho interesse na ' + p.nome)}" target="_blank" rel="noopener noreferrer" class="bg-[#22c55e] hover:bg-green-600 text-white px-4 rounded-lg flex items-center justify-center transition-colors"><svg class="ic text-lg"><use href="#wa"/></svg></a>
+      </div>
+    </div>
+  </article>`).join('');
+
+// ===== Antes e Depois: coloque suas fotos aqui =====
+// antes  = nome da foto ANTES (mesma pasta deste HTML)
+// depois = nome da foto DEPOIS
+// Deixe '' enquanto não tiver as fotos (aparece um fundo de exemplo).
+// Para adicionar outro comparativo, copie uma linha { ... } e cole abaixo.
+// Dica: use fotos do MESMO ângulo e com o MESMO tamanho para o efeito ficar perfeito.
+const antesDepois = [
+  { titulo:'Lavagem detalhada', antes:'carro1.jpeg', depois:'carro2.jpeg' },
+  { titulo:'Limpeza de motor',        antes:'motor1.jpeg', depois:'motor2.jpeg' },
+  { titulo:'Polimento comercial',   antes:'poli1.jpeg', depois:'poli2.jpeg' }
+];
+const baBg = (img, tipo) => img
+  ? `url('${img}')`
+  : (tipo === 'antes'
+      ? 'linear-gradient(135deg,#4b4b4b,#1f1f1f)'
+      : 'linear-gradient(135deg,#0a4fd6,#001a4d)');
+document.getElementById('ba').innerHTML = antesDepois.map(it => `
+  <figure>
+    <div class="ba relative aspect-[4/3] overflow-hidden rounded-xl border border-slate-700/60 shadow-xl">
+      <div class="ba-layer" style="background-image:${baBg(it.depois,'depois')}"></div>
+      <div class="ba-layer ba-before" style="background-image:${baBg(it.antes,'antes')}"></div>
+      <span class="absolute top-3 left-3 bg-black/60 text-[11px] font-semibold tracking-widest px-2.5 py-1 rounded pointer-events-none">ANTES</span>
+      <span class="absolute top-3 right-3 bg-black/60 text-[11px] font-semibold tracking-widest px-2.5 py-1 rounded pointer-events-none">DEPOIS</span>
+      <div class="ba-line"><span class="ba-knob"><svg class="ic text-lg" viewBox="0 0 24 24"><path d="M8 7l-5 5 5 5M16 7l5 5-5 5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg></span></div>
+      <input type="range" min="0" max="100" value="50" class="ba-range" aria-label="Comparar antes e depois: ${it.titulo}">
+    </div>
+    <figcaption class="mt-3 text-center font-heading font-bold uppercase tracking-wide text-sm">${it.titulo}</figcaption>
+  </figure>`).join('');
+document.addEventListener('input', e => {
+  if (e.target.classList.contains('ba-range'))
+    e.target.closest('.ba').style.setProperty('--pos', e.target.value + '%');
+});
+
+document.getElementById('ano').textContent = new Date().getFullYear();
+
+document.addEventListener('click', e => {
+  const more = e.target.closest('[data-more]');
+  if (more) {
+    const open = document.getElementById('o' + more.dataset.more).classList.toggle('open');
+    more.classList.toggle('open', open);
+    more.textContent = open ? 'Ocultar' : 'Saber mais';
+  }
+  const link = e.target.closest('.tab-link');
+  if (e.target.closest('[data-menu-open]')) openMenu();
+  if (e.target.closest('[data-close-menu]')) closeMenu();
+  if (link) { e.preventDefault(); closeMenu(); show(link.dataset.tab, link.dataset.scroll); }
+});
+const menuBtn = document.querySelector('[data-menu-open]');
+const menuPanel = document.getElementById('menu-panel');
+function openMenu(){
+  document.body.classList.add('menu-open');
+  menuBtn.setAttribute('aria-expanded','true');
+  menuPanel.setAttribute('aria-hidden','false');
+  requestAnimationFrame(() => menuPanel.querySelector('[data-close-menu]').focus({preventScroll:true}));
+}
+function closeMenu(){
+  if (!document.body.classList.contains('menu-open')) return;
+  document.body.classList.remove('menu-open');
+  menuBtn.setAttribute('aria-expanded','false'); menuPanel.setAttribute('aria-hidden','true');
+}
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeMenu(); });
+function show(id, scrollTo){
+  document.querySelectorAll('.section').forEach(s => s.classList.toggle('show', s.id === id));
+  document.querySelectorAll('nav .tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === id));
+  window.scrollTo(0,0);
+  if (scrollTo) setTimeout(() => { const t = document.getElementById(scrollTo); if (t) t.scrollIntoView({behavior:'smooth', block:'start'}); }, 60);
+}
+</script>
